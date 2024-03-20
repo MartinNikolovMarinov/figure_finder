@@ -111,8 +111,11 @@ target_set_default_flags(figure_finder)
 
 if (FIGURE_FINDER_BUILD_TESTS)
     set (test_files
+        # experiments.cpp
         test_main.cpp
         tests/t-index.cpp
+        tests/t-figure_finder.cpp
+        tests/rnd.cpp
     )
 
     add_executable(tests ${test_files})

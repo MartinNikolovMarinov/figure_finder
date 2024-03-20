@@ -1,29 +1,27 @@
-#include <figure_finder.h>
+#include "tests/t-index.h"
 
-using namespace coretypes;
+int main(i32 argc, char** argv) {
+    // Print compiler
+    if constexpr (COMPILER_CLANG == 1)   { std::cout << "[COMPILER] COMPILER_CLANG" << std::endl; }
+    if constexpr (COMPILER_GCC == 1)     { std::cout << "[COMPILER] COMPILER_GCC" << std::endl; }
+    if constexpr (COMPILER_MSVC == 1)    { std::cout << "[COMPILER] COMPILER_MSVC" << std::endl; }
+    if constexpr (COMPILER_UNKNOWN == 1) { std::cout << "[COMPILER] COMPILER_UNKNOWN" << std::endl; }
 
-#include <iostream>
+    // Print OS
+    if constexpr (OS_WIN == 1)     { std::cout << "[OS] OS_WIN" << std::endl; }
+    if constexpr (OS_LINUX == 1)   { std::cout << "[OS] OS_LINUX" << std::endl; }
+    if constexpr (OS_MAC == 1)     { std::cout << "[OS] OS_MAC" << std::endl; }
+    if constexpr (OS_UNKNOWN == 1) { std::cout << "[OS] OS_UNKNOWN" << std::endl; }
 
-using DataType = std::vector<bool>;
-
-i32 main(i32 argc, char** argv) {
     if (!core::initCore(argc, argv)) {
         return -1;
     }
     defer { core::shutdownCore(); };
 
-    std::vector<bool> matrix = {
-        0, 1, 0, 0, 1,
-        1, 1, 1, 1, 1,
-        0, 1, 0, 0, 1,
-        1, 1, 1, 1, 1
-    };
+    // Print CPU architecture
+    std::cout << "[CPU ARCH] " << CPU_ARCH << std::endl;
 
-    i32 nFigures = figfind::countFiguresPathCompression(matrix, 5, 4);
-    i32 nFiguresDFS = figfind::countFiguresDFS(matrix, 5, 4);
+    i32 exitCode = runAllTests();
 
-    std::cout << "Number of figures: " << nFigures << std::endl;
-    std::cout << "Number of figures: " << nFiguresDFS << std::endl;
-
-    return 0;
+    return exitCode;
 }
