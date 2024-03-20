@@ -1,0 +1,31 @@
+{
+	"version": 3,
+	"configurePresets": [
+		{
+			"name": "debug",
+			"displayName": "Debug configuration.",
+			"description": "Debug configuration.",
+			"binaryDir": "${sourceDir}/build",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug",
+
+				"CORE_ASSERT_ENABLED": "ON",
+				"FIGURE_FINDER_BUILD_STATIC": "OFF",
+				"FIGURE_FINDER_BUILD_TESTS": "ON"
+			}
+		},
+		{
+			"name": "release",
+			"displayName": "Release configuration.",
+			"description": "Release configuration.",
+			"binaryDir": "${sourceDir}/build",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release",
+
+				"CORE_ASSERT_ENABLED": "ON",
+				"FIGURE_FINDER_BUILD_STATIC": "OFF",
+				"FIGURE_FINDER_BUILD_TESTS": "ON"
+			}
+		}
+	]
+}
