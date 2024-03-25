@@ -37,6 +37,12 @@ cd build
 ctest --config Release --verbose
 ```
 
+Windows might want:
+```bash
+cd build
+ctest -C Release --verbose
+```
+
 ## Cross-Platform support
 
 There is an github actions based automation testing setup for Linux, MacOS and Windows. The project is tested on all three platforms. It was also tested for MacOS ARM device locally, since github actions do not support an easy way to test on ARM. The code is tested for the 3 main compilers - GCC, Clang and MSVC.
