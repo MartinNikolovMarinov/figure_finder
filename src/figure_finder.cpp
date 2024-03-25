@@ -231,6 +231,45 @@ i32 countFiguresPathCompression(const DataType& figures, i64 w, i64 h) {
 
 #pragma region Parallel Implementation
 
+namespace {
+
+struct ParallelChunk {
+    i32 id;
+    i32 node;
+};
+
+struct ParallelChunkHash {
+    inline std::size_t operator()(const ParallelChunk& chunk) const {
+        return std::hash<i32>()(chunk.id) ^ std::hash<i32>()(chunk.node);
+    }
+};
+
+inline bool operator==(const ParallelChunk& lhs, const ParallelChunk& rhs) {
+    return lhs.id == rhs.id && lhs.node == rhs.node;
+}
+
+inline bool operator!=(const ParallelChunk& lhs, const ParallelChunk& rhs) {
+    return !(lhs == rhs);
+}
+
+inline bool operator<(const ParallelChunk& lhs, const ParallelChunk& rhs) {
+    return lhs.id < rhs.id || (lhs.id == rhs.id && lhs.node < rhs.node);
+}
+
+inline bool operator>(const ParallelChunk& lhs, const ParallelChunk& rhs) {
+    return lhs.id > rhs.id || (lhs.id == rhs.id && lhs.node > rhs.node);
+}
+
+inline bool operator>=(const ParallelChunk& lhs, const ParallelChunk& rhs) {
+    return lhs > rhs || lhs == rhs;
+}
+
+inline bool operator<=(const ParallelChunk& lhs, const ParallelChunk& rhs) {
+    return lhs < rhs || lhs == rhs;
+}
+
+} // namespace
+
 i32 countFiguresParallel(const DataType& figures, i64 w, i64 h, u32 nThreads) {
     bool useSingleThread = nThreads <= 1;
     bool hightTooSmallForParallelism = h < i64(nThreads);
@@ -239,10 +278,7 @@ i32 countFiguresParallel(const DataType& figures, i64 w, i64 h, u32 nThreads) {
         return countFiguresPathCompression(figures, w, h);
     }
 
-    constexpr u32 MAX_THREADS_ALGORITHM_SUPPORTS = 32; // The marge section of the algorithms supports up to 32 chunks.
-    const u32 MAX_THREADS = (std::thread::hardware_concurrency() < MAX_THREADS_ALGORITHM_SUPPORTS) ?
-                                MAX_THREADS_ALGORITHM_SUPPORTS :
-                                std::thread::hardware_concurrency();
+    const u32 MAX_THREADS = std::thread::hardware_concurrency();
     if (nThreads > MAX_THREADS) {
         nThreads = MAX_THREADS;
     }
@@ -290,72 +326,25 @@ i32 countFiguresParallel(const DataType& figures, i64 w, i64 h, u32 nThreads) {
         nFigures += res;
     }
 
-    /**
-     * IMPORTANT: This comment explains why the algorithm is capped to 32 threads?
-     *
-     * The following code merges the results from the parallel processed chunks. It works by connecting the last row of
-     * chunk i with the first row of the chunk i+1.
-     *
-     * In order to do this, the following conditions must be met:
-     *      0. The markings vector must have normalized rows at the top and bottom of each chunk.
-     *      1. Each figure must be uniquely identified across all chunks.
-     *      2. Each identifier in figure i must be smaller than the identifier in figure i+1.
-     *
-     * Point 0 is achieved by the pathCompression function, when the normalize parameter is set to true.
-     *
-     * Point 1 and 2 create a nasty problem - the seperately processed chunks have their own "local" figure identifiers,
-     * which will overlap with the identifiers of the other chunks.
-     *
-     * To address this problem an "offset per chunk" variable is introduced. Adding this variable to the current chunk
-     * figure "local" identifier will create a new "global" identifier.
-     *
-     * Example:
-     *
-     * Lets say we have 3 chunks and the following "local" figure identifiers:
-     *
-     * chunk 0: { 2, 3, 4, 5 }
-     * chunk 1: { 3, 4, 8 }
-     * chunk 2: { 2, 3 }
-     *
-     * And lets say "offset per chunk" = 10000, then the "global" figure identifiers will be:
-     *
-     * chunk 0: { 10002, 10003, 10004, 10005 }
-     * chunk 1: { 20003, 20004, 20008 }
-     * chunk 2: { 30002, 30003 }
-     *
-     * Adding the offset introduces the risk of figure identifier overflow beyond the 32-bit integer limit. To prevent
-     * this, we employ 64-bit integers for "global" identifiers, allocating the upper 32 bits for chunk-specific offsets.
-     * This allocation strategy consumes 1 bit of the number space for each chunk, setting a hard limit of 32 chunks.
-     * Beyond this threshold, the available precision for "local" identifiers drops below 32 bits, making overlaps
-     * possible again. Consequently, this limitation also restricts the maximum number of processing threads to 32.
-     *
-     * TODO: Avenues to explore to remove the 32 thread limitation:
-     *    1. Use a big integer for a wider range of numbers.
-     *    2. Use some kind of hashing to map the "local" identifiers to a wider range.
-    */
     {
-        i64 offsetPerChunk = i64(core::MAX_I64 / nThreads);
-        std::unordered_map<i64, i64> chunkBoundaryConnections; // Map to reconcile figures at chunk boundaries.
+        std::unordered_map<ParallelChunk, ParallelChunk, ParallelChunkHash> chunkBoundaryConnections;
 
         for (i32 c = 0; c < i32(nThreads) - 1; c++) {
             i32* bottomPtr = markings.data() + w * chunkHeight * (c + 1);
             i32* topPtr = bottomPtr - w;
 
-            i64 topOffset = i64(c) * offsetPerChunk;
-            i64 bottomOffset = topOffset + offsetPerChunk;
-
             for (i32 x = 0; x < w; x++, topPtr++, bottomPtr++) {
-                i64 top = i64(*topPtr);
-                i64 bottom = i64(*bottomPtr);
+                i32 top = *topPtr;
+                i32 bottom = *bottomPtr;
 
                 if (top == 0 || bottom == 0) continue;
 
-                top += topOffset;
-                bottom += bottomOffset;
+                ParallelChunk topChunk {c, top};
+                ParallelChunk bottomChunk {c + 1, bottom};
 
-                while (top != bottom) {
-                    i64& higher = top > bottom ? top : bottom;
-                    i64& lower = top > bottom ? bottom : top;
+                while (topChunk != bottomChunk) {
+                    ParallelChunk& higher = topChunk > bottomChunk ? topChunk : bottomChunk;
+                    ParallelChunk& lower = topChunk > bottomChunk ? bottomChunk : topChunk;
 
                     auto it = chunkBoundaryConnections.find(higher);
                     if (it != chunkBoundaryConnections.end() && it->second != lower) {
