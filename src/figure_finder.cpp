@@ -123,17 +123,8 @@ i32 countFiguresBFS(const DataType& figures, i64 w, i64 h) {
 namespace {
 
 i32 pathCompression(i32* markings, i64 w, i64 h, bool normalize = false) {
-    auto reconcileRoots = [](std::unordered_map<i32, i32>& m, i32 leftRoot, i32 topRoot, i32& curr) {
+    auto reconcileRoots = [](std::unordered_map<i32, i32>& m, i32 leftRoot, i32 topRoot) -> i32 {
         // This code creates connections between the roots of the current cell's left and top neighbors.
-        // It also compresses the path to the root for each figure
-
-        while (m.find(leftRoot) != m.end() && m[leftRoot] != topRoot) {
-            leftRoot = m[leftRoot];
-        }
-        while (m.find(topRoot) != m.end() && m[topRoot] != leftRoot) {
-            topRoot = m[topRoot];
-        }
-
         if (leftRoot != topRoot) {
             if (auto it = m.find(topRoot); it != m.end()) {
                 // Prevent cycles in the path:
@@ -149,7 +140,16 @@ i32 pathCompression(i32* markings, i64 w, i64 h, bool normalize = false) {
             }
         }
 
-        curr = topRoot; // Set current cell's root to the reconciled root
+        return topRoot; // Set current cell's root to the reconciled root
+    };
+
+    auto compressPath = [](std::unordered_map<i32, i32>& m, i32& left, i32& top) {
+        while (m.find(left) != m.end() && m[left] != top) {
+            left = m[left];
+        }
+        while (m.find(top) != m.end() && m[top] != left) {
+            top = m[top];
+        }
     };
 
     i32* currRow = markings;
@@ -172,8 +172,13 @@ i32 pathCompression(i32* markings, i64 w, i64 h, bool normalize = false) {
             if (leftNeighbor != 0) {
                 *currRow = leftNeighbor;
                 if (topNeighbor != 0 && leftNeighbor != topNeighbor) {
+                    // [Slow path] we have to do a bunch of work here.
+
+                    // Compresse the path to the root
+                    compressPath(figureConnections, leftNeighbor, topNeighbor);
+
                     // Reconcile differing neighbor roots
-                    reconcileRoots(figureConnections, leftNeighbor, topNeighbor, *currRow);
+                    *currRow = reconcileRoots(figureConnections, leftNeighbor, topNeighbor);
                 }
             }
             else if (topNeighbor != 0) {
@@ -343,6 +348,19 @@ i32 countFiguresParallel(const DataType& figures, i64 w, i64 h, u32 nThreads) {
                 ParallelChunk bottomChunk {c + 1, bottom};
 
                 while (topChunk != bottomChunk) {
+                    /**
+                     * The entire reason for this loop are cases like ths one:
+                     *
+                     * 111111111111
+                     * 100001100001
+                     * <----------> // Chunk boundary
+                     * 100001100001
+                     * 100001100001
+                     * <----------> // Chunk boundary
+                     * 100001100001
+                     * 111111111111
+                    */
+
                     ParallelChunk& higher = topChunk > bottomChunk ? topChunk : bottomChunk;
                     ParallelChunk& lower = topChunk > bottomChunk ? bottomChunk : topChunk;
 
