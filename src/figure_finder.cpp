@@ -143,13 +143,11 @@ i32 pathCompression(i32* markings, i64 w, i64 h, bool normalize = false) {
         return topRoot; // Set current cell's root to the reconciled root
     };
 
-    auto compressPath = [](std::unordered_map<i32, i32>& m, i32& left, i32& top) {
-        while (m.find(left) != m.end() && m[left] != top) {
-            left = m[left];
+    auto compressPath = [](std::unordered_map<i32, i32>& m, i32 n) -> i32 {
+        while (m.find(n) != m.end()) {
+            n = m[n];
         }
-        while (m.find(top) != m.end() && m[top] != left) {
-            top = m[top];
-        }
+        return n;
     };
 
     i32* currRow = markings;
@@ -170,18 +168,18 @@ i32 pathCompression(i32* markings, i64 w, i64 h, bool normalize = false) {
 
             // Determine the root for the current cell based on its neighbors
             if (leftNeighbor != 0) {
+                leftNeighbor = compressPath(figureConnections, leftNeighbor);
                 *currRow = leftNeighbor;
                 if (topNeighbor != 0 && leftNeighbor != topNeighbor) {
-                    // [Slow path] we have to do a bunch of work here.
-
                     // Compresse the path to the root
-                    compressPath(figureConnections, leftNeighbor, topNeighbor);
+                    topNeighbor = compressPath(figureConnections, topNeighbor);
 
                     // Reconcile differing neighbor roots
                     *currRow = reconcileRoots(figureConnections, leftNeighbor, topNeighbor);
                 }
             }
             else if (topNeighbor != 0) {
+                topNeighbor = compressPath(figureConnections, topNeighbor);
                 *currRow = topNeighbor;
             }
             else {
